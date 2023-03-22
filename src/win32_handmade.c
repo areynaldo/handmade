@@ -355,7 +355,7 @@ WinMain(HINSTANCE instance,
             Win32ResizeDIBSection(&globalBackBuffer, 1280, 720);
 
             int samplesPerSecond = 48000;
-            int bytesPerSample = sizeof(16) * 2;
+            int bytesPerSample = sizeof(i16) * 2;
             int secondaryBufferSize = 2 * samplesPerSecond * bytesPerSample;
             u32 runningSampleIndex = 0;
             int toneHz = 1000;
