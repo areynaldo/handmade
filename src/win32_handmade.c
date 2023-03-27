@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <dsound.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -403,6 +404,11 @@ WinMain(HINSTANCE instance,
         LPSTR commandLine,
         int showCommandLine)
 {
+    LARGE_INTEGER perfCountFrequencyResult;
+    QueryPerformanceFrequency(&perfCountFrequencyResult);
+    i64 perfCountFrequency = perfCountFrequencyResult.QuadPart;
+
+
     Win32LoadXInput();
 
     WNDCLASSA windowClass = {0};
@@ -437,12 +443,15 @@ WinMain(HINSTANCE instance,
             Win32FillSoundBuffer(&soundOutput, 0, (soundOutput.latencySampleCount * soundOutput.bytesPerSample));
             IDirectSoundBuffer_Play(globalSecondaryBuffer, 0, 0, DSBPLAY_LOOPING);
 
-            running = true;
             // Since we specified CS_OWNDC, we can just
             // get one device context and use it forever because we
             // are not sharing it with anyone.
             int xOffset = 0;
             int yOffset = 0;
+            LARGE_INTEGER lastCounter;
+            QueryPerformanceCounter(&lastCounter);
+            u64 lastCycleCount = __rdtsc();
+            running = true;
             while (running)
             {
                 MSG message;
@@ -500,8 +509,12 @@ WinMain(HINSTANCE instance,
                 if (SUCCEEDED(IDirectSoundBuffer_GetCurrentPosition(globalSecondaryBuffer,
                                                                     &playCursor, &writeCursor)))
                 {
-                    DWORD byteToLock = (soundOutput.runningSampleIndex *soundOutput.bytesPerSample) % soundOutput.secondaryBufferSize;
-                    DWORD targetCursor = ((playCursor + (soundOutput.latencySampleCount * soundOutput.bytesPerSample)) % soundOutput.secondaryBufferSize);
+                    DWORD byteToLock = (soundOutput.runningSampleIndex *soundOutput.bytesPerSample)
+                                        % soundOutput.secondaryBufferSize;
+
+                    DWORD targetCursor = ((playCursor + (soundOutput.latencySampleCount * soundOutput.bytesPerSample))
+                                          % soundOutput.secondaryBufferSize);
+
                     DWORD bytesToWrite;
                     if (byteToLock > targetCursor)
                     {
@@ -519,6 +532,22 @@ WinMain(HINSTANCE instance,
 
                 Win32WindowDimension dimension = Win32GetWindowDimension(window);
                 Win32DisplayBufferInWindow(&globalBackBuffer, deviceContext, dimension.width, dimension.height);
+
+                LARGE_INTEGER endCounter;
+                QueryPerformanceCounter(&endCounter);
+
+                u64 endCycleCount = __rdtsc();
+                i64 counterElapsed = endCounter.QuadPart - lastCounter.QuadPart;
+                i64 cyclesElapsed = endCycleCount - lastCycleCount;
+                f32 msPerFrame = 1000.0*(f32)counterElapsed / (f32)perfCountFrequency;
+                f32 fps = (f32)perfCountFrequency / (f32) counterElapsed;
+                f32 megaCyclesPerFrame = (f32) cyclesElapsed / (1000.0*1000.0);
+                char buffer[256];
+                sprintf(buffer, "%.02fms/f %.02ff/s %.02fMc/f \n", msPerFrame, fps, megaCyclesPerFrame);
+                OutputDebugStringA(buffer);
+
+                lastCounter = endCounter;
+                lastCycleCount = __rdtsc();
             }
         }
         else
