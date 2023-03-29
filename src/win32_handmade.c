@@ -1,17 +1,5 @@
-#include <stdio.h>
-#include <dsound.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <windows.h>
-#include <xinput.h>
-// TODO: implement sine oruselves
-#include <math.h>
-
-#define internal static
-#define persist static
-#define global static
-
-#define Pi32 3.14159265359f
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -27,6 +15,21 @@ typedef float f32;
 typedef double f64;
 
 typedef i32 b32;
+
+#define internal static
+#define persist static
+#define global static
+
+#define Pi32 3.14159265359f
+
+#include "handmade.c"
+
+#include <windows.h>
+#include <stdio.h>
+#include <xinput.h>
+#include <dsound.h>
+#include <math.h>
+
 
 
 typedef struct
@@ -233,26 +236,6 @@ Win32GetWindowDimension(HWND window)
     result.width = clientRect.right - clientRect.left;
     result.height = clientRect.bottom - clientRect.top;
     return result;
-}
-
-internal void
-RenderWeirdGradient(Win32OffscreenBuffer *buffer, int xOffset, int yOffset)
-{
-    u8 *row = (u8 *)buffer->memory;
-    for (int y = 0; y < buffer->height; y++)
-    {
-        u32 *pixel = (u32 *)row;
-        for (int x = 0; x < buffer->width; x++)
-        {
-            // Pixel Memory BB GG RR XX
-            u8 red = 0;
-            u8 green = (u8)(y + yOffset);
-            u8 blue = (u8)(x + xOffset);
-
-            *pixel++ = red << 16 | green << 8 | blue;
-        }
-        row += buffer->pitch;
-    }
 }
 
 internal void
@@ -502,7 +485,12 @@ WinMain(HINSTANCE instance,
                 // vibration.wLeftMotorSpeed = 60000;
                 // vibration.wRightMotorSpeed = 60000;
                 // XInputSetState(0, &vibration);
-                RenderWeirdGradient(&globalBackBuffer, xOffset, yOffset);
+                HandmadeOffscreenBuffer buffer = {0};
+                buffer.memory = globalBackBuffer.memory;
+                buffer.width = globalBackBuffer.width;
+                buffer.height = globalBackBuffer.height;
+                buffer.pitch = globalBackBuffer.pitch;
+                HandmadeUpdateAndRender(&buffer);
 
                 DWORD playCursor;
                 DWORD writeCursor;
@@ -542,10 +530,11 @@ WinMain(HINSTANCE instance,
                 f32 msPerFrame = 1000.0*(f32)counterElapsed / (f32)perfCountFrequency;
                 f32 fps = (f32)perfCountFrequency / (f32) counterElapsed;
                 f32 megaCyclesPerFrame = (f32) cyclesElapsed / (1000.0*1000.0);
+                /*
                 char buffer[256];
                 sprintf(buffer, "%.02fms/f %.02ff/s %.02fMc/f \n", msPerFrame, fps, megaCyclesPerFrame);
                 OutputDebugStringA(buffer);
-
+                */
                 lastCounter = endCounter;
                 lastCycleCount = __rdtsc();
             }
