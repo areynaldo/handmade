@@ -20,11 +20,28 @@ RenderWeirdGradient(HandmadeOffscreenBuffer *buffer, int xOffset, int yOffset)
     }
 }
 
-void
-HandmadeUpdateAndRender(HandmadeOffscreenBuffer *buffer)
+internal void
+HandmadeOutputSound(HandmadeSoundOutputBuffer *soundBuffer, int toneHz)
 {
-    int xOffset = 0;
-    int yOffset = 0;
+    persist f32 tSine;
+    i16 toneVolume = 3000;
+    int wavePeriod = soundBuffer->samplesPerSecond / toneHz;
+    i16 *sampleOut = soundBuffer->samples;
+    for (int sampleIndex = 0; sampleIndex < soundBuffer->sampleCount; sampleIndex++)
+    {
+        f32 sineValue = sinf(tSine);
+        i16 sampleValue = (i16)(sineValue * toneVolume);
 
+        *sampleOut++ = sampleValue;
+        *sampleOut++ = sampleValue;
+
+        tSine += (2.0f * Pi32 * 1.0f) / (f32)wavePeriod;
+    }
+}
+
+void HandmadeUpdateAndRender(HandmadeOffscreenBuffer *buffer, int xOffset, int yOffset,
+                             HandmadeSoundOutputBuffer *soundBuffer, int toneHz)
+{
+    HandmadeOutputSound(soundBuffer, toneHz);
     RenderWeirdGradient(buffer, xOffset, yOffset);
 }

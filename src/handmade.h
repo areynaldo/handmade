@@ -9,6 +9,14 @@ typedef struct
     int pitch;
 } HandmadeOffscreenBuffer;
 
-void HandmadeUpdateAndRender(HandmadeOffscreenBuffer *buffer);
+typedef struct
+{
+    int samplesPerSecond;
+    int sampleCount;
+    i16 *samples;
+} HandmadeSoundOutputBuffer;
+
+void HandmadeUpdateAndRender(HandmadeOffscreenBuffer *buffer, int xOffset, int yOffset,
+                             HandmadeSoundOutputBuffer *soundBuffer, int toneHz);
 
 #endif

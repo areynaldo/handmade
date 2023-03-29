@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -24,13 +25,10 @@ typedef i32 b32;
 
 #include "handmade.c"
 
-#include <windows.h>
-#include <stdio.h>
-#include <xinput.h>
 #include <dsound.h>
-#include <math.h>
-
-
+#include <stdio.h>
+#include <windows.h>
+#include <xinput.h>
 
 typedef struct
 {
@@ -178,51 +176,69 @@ Win32InitSound(HWND window, i32 samplesPerSecond, i32 bufferSize)
 }
 
 internal void
-Win32FillSoundBuffer(Win32SoundOutput *soundOutput, DWORD byteToLock, DWORD bytesToWrite)
+Win32ClearBuffer(Win32SoundOutput *soundOutput)
 {
-                    void *region1;
-                    DWORD region1Size;
-                    void *region2;
-                    DWORD region2Size;
-                    if (SUCCEEDED(IDirectSoundBuffer_Lock(globalSecondaryBuffer,
-                                                          byteToLock, bytesToWrite,
-                                                          &region1, &region1Size,
-                                                          &region2, &region2Size,
-                                                          0)))
-                    {
-                        i16 *sampleOut = (i16 *)region1;
-                        DWORD region1SampleCount = region1Size / soundOutput->bytesPerSample;
-                        for (DWORD sampleIndex = 0; sampleIndex < region1SampleCount; sampleIndex++)
-                        {
-                            f32 sineValue = sinf(soundOutput->tSine);
-                            i16 sampleValue = sineValue * soundOutput->toneVolume;
+    void *region1;
+    DWORD region1Size;
+    void *region2;
+    DWORD region2Size;
+    if (SUCCEEDED(IDirectSoundBuffer_Lock(globalSecondaryBuffer,
+                                          0, soundOutput->secondaryBufferSize,
+                                          &region1, &region1Size,
+                                          &region2, &region2Size,
+                                          0)))
+    {
+        u8 *destSample = (u8 *)region1;
+        for (DWORD byteIndex = 0; byteIndex < region1Size; byteIndex++)
+        {
+            *destSample++ = 0;
+        }
+        destSample = (u8 *)region2;
+        for (DWORD byteIndex = 0; byteIndex < region2Size; byteIndex++)
+        {
+            *destSample++ = 0;
+        }
+        IDirectSoundBuffer_Unlock(globalSecondaryBuffer, region1, region1Size, region2, region2Size);
+        IDirectSoundBuffer_Unlock(globalSecondaryBuffer, region1, region1Size, region2, region2Size);
+    }
+}
 
-                            *sampleOut = sampleValue;
-                            sampleOut++;
-                            *sampleOut = sampleValue;
-                            sampleOut++;
+internal void
+Win32FillSoundBuffer(Win32SoundOutput *soundOutput, DWORD byteToLock, DWORD bytesToWrite,
+                     HandmadeSoundOutputBuffer *sourceBuffer)
+{
+    void *region1;
+    DWORD region1Size;
+    void *region2;
+    DWORD region2Size;
+    if (SUCCEEDED(IDirectSoundBuffer_Lock(globalSecondaryBuffer,
+                                          byteToLock, bytesToWrite,
+                                          &region1, &region1Size,
+                                          &region2, &region2Size,
+                                          0)))
+    {
+        DWORD region1SampleCount = region1Size / soundOutput->bytesPerSample;
+        i16 *sourceSample = sourceBuffer->samples;
+        i16 *destSample = (i16 *)region1;
+        for (DWORD sampleIndex = 0; sampleIndex < region1SampleCount; sampleIndex++)
+        {
+            *destSample++ = *sourceSample++;
+            *destSample++ = *sourceSample++;
 
-                            soundOutput->tSine += (2.0f * Pi32 * 1.0f) / (f32)soundOutput->wavePeriod;
-                            soundOutput->runningSampleIndex++;
-                        }
-                        sampleOut = (i16 *)region2;
-                        DWORD region2SampleCount = region2Size / soundOutput->bytesPerSample;
-                        for (DWORD sampleIndex = 0; sampleIndex < region2SampleCount; sampleIndex++)
-                        {
-                            f32 sineValue = sinf(soundOutput->tSine);
-                            i16 sampleValue = sineValue * soundOutput->toneVolume;
+            soundOutput->runningSampleIndex++;
+        }
+        destSample = (i16 *)region2;
+        DWORD region2SampleCount = region2Size / soundOutput->bytesPerSample;
+        for (DWORD sampleIndex = 0; sampleIndex < region2SampleCount; sampleIndex++)
+        {
+            *destSample++ = *sourceSample++;
+            *destSample++ = *sourceSample++;
 
-                            *sampleOut = sampleValue;
-                            sampleOut++;
-                            *sampleOut = sampleValue;
-                            sampleOut++;
+            soundOutput->runningSampleIndex++;
+        }
 
-                            soundOutput->tSine += (2.0f * Pi32 * 1.0f) / (f32)soundOutput->wavePeriod;
-                            soundOutput->runningSampleIndex++;
-                        }
-
-                        IDirectSoundBuffer_Unlock(globalSecondaryBuffer, region1, region1Size, region2, region2Size);
-                    }
+        IDirectSoundBuffer_Unlock(globalSecondaryBuffer, region1, region1Size, region2, region2Size);
+    }
 }
 
 internal Win32WindowDimension
@@ -391,7 +407,6 @@ WinMain(HINSTANCE instance,
     QueryPerformanceFrequency(&perfCountFrequencyResult);
     i64 perfCountFrequency = perfCountFrequencyResult.QuadPart;
 
-
     Win32LoadXInput();
 
     WNDCLASSA windowClass = {0};
@@ -423,9 +438,9 @@ WinMain(HINSTANCE instance,
             soundOutput.latencySampleCount = soundOutput.samplesPerSecond / 15;
 
             Win32InitSound(window, soundOutput.samplesPerSecond, soundOutput.secondaryBufferSize);
-            Win32FillSoundBuffer(&soundOutput, 0, (soundOutput.latencySampleCount * soundOutput.bytesPerSample));
+            Win32ClearBuffer(&soundOutput);
             IDirectSoundBuffer_Play(globalSecondaryBuffer, 0, 0, DSBPLAY_LOOPING);
-
+            i16 *samples = VirtualAlloc(0, soundOutput.secondaryBufferSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
             // Since we specified CS_OWNDC, we can just
             // get one device context and use it forever because we
             // are not sharing it with anyone.
@@ -481,41 +496,49 @@ WinMain(HINSTANCE instance,
                     {
                     }
                 }
-                // XINPUT_VIBRATION vibration;
-                // vibration.wLeftMotorSpeed = 60000;
-                // vibration.wRightMotorSpeed = 60000;
-                // XInputSetState(0, &vibration);
-                HandmadeOffscreenBuffer buffer = {0};
-                buffer.memory = globalBackBuffer.memory;
-                buffer.width = globalBackBuffer.width;
-                buffer.height = globalBackBuffer.height;
-                buffer.pitch = globalBackBuffer.pitch;
-                HandmadeUpdateAndRender(&buffer);
 
+                DWORD byteToLock;
+                DWORD bytesToWrite;
+                DWORD targetCursor;
                 DWORD playCursor;
                 DWORD writeCursor;
+                b32 soundIsValid = false; 
                 if (SUCCEEDED(IDirectSoundBuffer_GetCurrentPosition(globalSecondaryBuffer,
                                                                     &playCursor, &writeCursor)))
                 {
-                    DWORD byteToLock = (soundOutput.runningSampleIndex *soundOutput.bytesPerSample)
-                                        % soundOutput.secondaryBufferSize;
+                    byteToLock = (soundOutput.runningSampleIndex * soundOutput.bytesPerSample) % soundOutput.secondaryBufferSize;
 
-                    DWORD targetCursor = ((playCursor + (soundOutput.latencySampleCount * soundOutput.bytesPerSample))
-                                          % soundOutput.secondaryBufferSize);
+                    targetCursor = ((playCursor + (soundOutput.latencySampleCount * soundOutput.bytesPerSample)) % soundOutput.secondaryBufferSize);
 
-                    DWORD bytesToWrite;
                     if (byteToLock > targetCursor)
                     {
                         // Play cursor is behind
                         bytesToWrite = soundOutput.secondaryBufferSize - byteToLock; // Region 1
-                        bytesToWrite += targetCursor;                      // Region 2
+                        bytesToWrite += targetCursor;                                // Region 2
                     }
                     else
                     {
                         // Play cursor is in front
                         bytesToWrite = targetCursor - byteToLock;
                     }
-                    Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite);
+                    soundIsValid = true;
+                }
+
+                HandmadeSoundOutputBuffer soundBuffer = {0};
+                soundBuffer.samplesPerSecond = soundOutput.samplesPerSecond;
+                soundBuffer.sampleCount = bytesToWrite / soundOutput.bytesPerSample;
+                soundBuffer.samples = samples;
+
+                HandmadeOffscreenBuffer buffer = {0};
+                buffer.memory = globalBackBuffer.memory;
+                buffer.width = globalBackBuffer.width;
+                buffer.height = globalBackBuffer.height;
+                buffer.pitch = globalBackBuffer.pitch;
+
+                HandmadeUpdateAndRender(&buffer, xOffset, yOffset, &soundBuffer, soundOutput.toneHz);
+                if(soundIsValid)
+                {
+                    Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuffer);
                 }
 
                 Win32WindowDimension dimension = Win32GetWindowDimension(window);
@@ -527,9 +550,9 @@ WinMain(HINSTANCE instance,
                 u64 endCycleCount = __rdtsc();
                 i64 counterElapsed = endCounter.QuadPart - lastCounter.QuadPart;
                 i64 cyclesElapsed = endCycleCount - lastCycleCount;
-                f32 msPerFrame = 1000.0*(f32)counterElapsed / (f32)perfCountFrequency;
-                f32 fps = (f32)perfCountFrequency / (f32) counterElapsed;
-                f32 megaCyclesPerFrame = (f32) cyclesElapsed / (1000.0*1000.0);
+                f32 msPerFrame = 1000.0 * (f32)counterElapsed / (f32)perfCountFrequency;
+                f32 fps = (f32)perfCountFrequency / (f32)counterElapsed;
+                f32 megaCyclesPerFrame = (f32)cyclesElapsed / (1000.0 * 1000.0);
                 /*
                 char buffer[256];
                 sprintf(buffer, "%.02fms/f %.02ff/s %.02fMc/f \n", msPerFrame, fps, megaCyclesPerFrame);
