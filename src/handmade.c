@@ -39,9 +39,29 @@ HandmadeOutputSound(HandmadeSoundOutputBuffer *soundBuffer, int toneHz)
     }
 }
 
-void HandmadeUpdateAndRender(HandmadeOffscreenBuffer *buffer, int xOffset, int yOffset,
-                             HandmadeSoundOutputBuffer *soundBuffer, int toneHz)
+void HandmadeUpdateAndRender(HandmadeInput *input, HandmadeOffscreenBuffer *buffer,
+                             HandmadeSoundOutputBuffer *soundBuffer)
 {
+    persist int xOffset;
+    persist int yOffset;
+    persist int toneHz;
+
+    HandmadeControllerInput *input0 = &input->controllers[0];
+    if (input0->isAnalog)
+    {
+        xOffset += (int)(4.0f * input0->endX);
+        toneHz = 256 + (int)(128.0f * (input0->endY));
+    }
+    else
+    {
+
+    }
+
+    if(input0->down.endedDown)
+    {
+        yOffset += 1;
+    }
+
     HandmadeOutputSound(soundBuffer, toneHz);
     RenderWeirdGradient(buffer, xOffset, yOffset);
 }

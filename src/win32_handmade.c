@@ -23,44 +23,14 @@ typedef i32 b32;
 
 #define Pi32 3.14159265359f
 
-#include "handmade.c"
 
 #include <dsound.h>
 #include <stdio.h>
 #include <windows.h>
 #include <xinput.h>
 
-typedef struct
-{
-    int width;
-    int height;
-} Win32WindowDimension;
-
-typedef struct
-{
-    // PIxels are 32-bits wide,
-    // Memory order  0x BB GG RR XX
-    // Little Endian 0x XX RR GG BB
-    BITMAPINFO info;
-    void *memory;
-    int width;
-    int height;
-    int pitch;
-    int bytesPerPixel;
-} Win32OffscreenBuffer;
-
-typedef struct
-{
-    int samplesPerSecond;
-    int bytesPerSample;
-    int secondaryBufferSize;
-    u32 runningSampleIndex;
-    int toneHz;
-    int toneVolume;
-    int wavePeriod;
-    f32 tSine;
-    int latencySampleCount;
-} Win32SoundOutput;
+#include "handmade.c"
+#include "win32_handmade.h"
 
 global bool running;
 global Win32OffscreenBuffer globalBackBuffer;
@@ -124,6 +94,15 @@ Win32LoadXInput()
         XInputGetState = XInputGetStateStub;
         XInputSetState = XInputSetStateStub;
     }
+}
+
+internal void
+Win32ProcessXInputDigitalButton(DWORD xInputButtonState,
+                                HandmadeButtonState *oldState, DWORD buttonBit,
+                                HandmadeButtonState *newState)
+{
+    newState->endedDown = ((xInputButtonState & buttonBit) == buttonBit);
+    newState->halfTransitionCount = (oldState->endedDown != newState->endedDown) ? 1 : 0;
 }
 
 internal void
@@ -432,9 +411,6 @@ WinMain(HINSTANCE instance,
             soundOutput.bytesPerSample = sizeof(i16) * 2;
             soundOutput.secondaryBufferSize = 2 * soundOutput.samplesPerSecond * soundOutput.bytesPerSample;
             soundOutput.runningSampleIndex = 0;
-            soundOutput.toneHz = 1000;
-            soundOutput.wavePeriod = soundOutput.samplesPerSecond / soundOutput.toneHz;
-            soundOutput.toneVolume = 3000;
             soundOutput.latencySampleCount = soundOutput.samplesPerSecond / 15;
 
             Win32InitSound(window, soundOutput.samplesPerSecond, soundOutput.secondaryBufferSize);
@@ -444,8 +420,9 @@ WinMain(HINSTANCE instance,
             // Since we specified CS_OWNDC, we can just
             // get one device context and use it forever because we
             // are not sharing it with anyone.
-            int xOffset = 0;
-            int yOffset = 0;
+            HandmadeInput input[2] = {0};
+            HandmadeInput* oldInput = &input[0];
+            HandmadeInput* newInput = &input[1];
             LARGE_INTEGER lastCounter;
             QueryPerformanceCounter(&lastCounter);
             u64 lastCycleCount = __rdtsc();
@@ -463,9 +440,17 @@ WinMain(HINSTANCE instance,
                     TranslateMessage(&message);
                     DispatchMessageA(&message);
                 }
-                // TODO: should we poll this more frequently?
+
+                int maxControllerCount = XUSER_MAX_COUNT;
+                if(maxControllerCount < ArrayCount(newInput->controllers))
+                {
+                    maxControllerCount = ArrayCount(newInput->controllers);
+                }
                 for (DWORD controllerIndex = 0; controllerIndex < XUSER_MAX_COUNT; controllerIndex++)
                 {
+                    HandmadeControllerInput *oldController = &oldInput->controllers[controllerIndex];
+                    HandmadeControllerInput *newController = &newInput->controllers[controllerIndex];
+
                     XINPUT_STATE controllerState;
                     if (XInputGetState(controllerIndex, &controllerState) == ERROR_SUCCESS)
                     {
@@ -475,22 +460,54 @@ WinMain(HINSTANCE instance,
                         bool down = pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN;
                         bool left = pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT;
                         bool right = pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT;
-                        bool back = pad->wButtons & XINPUT_GAMEPAD_START;
-                        bool start = pad->wButtons & XINPUT_GAMEPAD_BACK;
-                        bool leftShoulder = pad->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER;
-                        bool rightShoulder = pad->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER;
-                        bool a = pad->wButtons & XINPUT_GAMEPAD_A;
-                        bool b = pad->wButtons & XINPUT_GAMEPAD_B;
-                        bool x = pad->wButtons & XINPUT_GAMEPAD_X;
-                        bool y = pad->wButtons & XINPUT_GAMEPAD_Y;
+                        // bool back = pad->wButtons & XINPUT_GAMEPAD_START;
+                        // bool start = pad->wButtons & XINPUT_GAMEPAD_BACK;
+                        Win32ProcessXInputDigitalButton(pad->wButtons,
+                                                        &oldController->down, XINPUT_GAMEPAD_A,
+                                                        &newController->down);
+                        Win32ProcessXInputDigitalButton(pad->wButtons,
+                                                        &oldController->down, XINPUT_GAMEPAD_B,
+                                                        &newController->down);
+                        Win32ProcessXInputDigitalButton(pad->wButtons,
+                                                        &oldController->down, XINPUT_GAMEPAD_X,
+                                                        &newController->down);
+                        Win32ProcessXInputDigitalButton(pad->wButtons,
+                                                        &oldController->down, XINPUT_GAMEPAD_Y,
+                                                        &newController->down);
+                        Win32ProcessXInputDigitalButton(pad->wButtons,
+                                                        &oldController->down, XINPUT_GAMEPAD_LEFT_SHOULDER,
+                                                        &newController->down);
+                        Win32ProcessXInputDigitalButton(pad->wButtons,
+                                                        &oldController->down, XINPUT_GAMEPAD_RIGHT_SHOULDER,
+                                                        &newController->down);
+                        f32 x;
+                        if(pad->sThumbLX < 0)
+                        {
+                            x = (f32)pad->sThumbLX / 32768.0f;
+                        }
+                        else
+                        {
+                            x = (f32)pad->sThumbLX / 32767.0f;
+                        }
 
-                        i16 stickX = pad->sThumbLX;
-                        i16 stickY = pad->sThumbLY;
-                        xOffset -= stickX >> 12;
-                        yOffset += stickY >> 12;
+                        f32 y;
+                        if(pad->sThumbLY < 0)
+                        {
+                            y = (f32)pad->sThumbLY / 32768.0f;
+                        }
+                        else
+                        {
+                            y = (f32)pad->sThumbLY / 32767.0f;
+                        }
 
-                        soundOutput.toneHz = 512 + (int)(256.0f * ((f32)stickY / 30000.0f));
-                        soundOutput.wavePeriod = soundOutput.samplesPerSecond / soundOutput.toneHz;
+
+                        newController->startX = oldController->endX;
+                        newController->startY = oldController->endY;
+
+                        newController->minX = newController->maxX =  newController->endX = x;
+                        newController->minY = newController->maxY =  newController->endY = y;
+
+                        newController->isAnalog = true;
                     }
                     else
                     {
@@ -502,7 +519,7 @@ WinMain(HINSTANCE instance,
                 DWORD targetCursor;
                 DWORD playCursor;
                 DWORD writeCursor;
-                b32 soundIsValid = false; 
+                b32 soundIsValid = false;
                 if (SUCCEEDED(IDirectSoundBuffer_GetCurrentPosition(globalSecondaryBuffer,
                                                                     &playCursor, &writeCursor)))
                 {
@@ -535,8 +552,8 @@ WinMain(HINSTANCE instance,
                 buffer.height = globalBackBuffer.height;
                 buffer.pitch = globalBackBuffer.pitch;
 
-                HandmadeUpdateAndRender(&buffer, xOffset, yOffset, &soundBuffer, soundOutput.toneHz);
-                if(soundIsValid)
+                HandmadeUpdateAndRender(&newInput, &buffer, &soundBuffer);
+                if (soundIsValid)
                 {
                     Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuffer);
                 }
@@ -560,6 +577,10 @@ WinMain(HINSTANCE instance,
                 */
                 lastCounter = endCounter;
                 lastCycleCount = __rdtsc();
+
+                HandmadeInput *temp = newInput;
+                newInput = oldInput;
+                oldInput = temp;
             }
         }
         else
