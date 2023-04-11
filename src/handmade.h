@@ -76,7 +76,7 @@ typedef struct
 
 typedef struct
 {
-    HandmadeControllerInput *controllers[4];
+    HandmadeControllerInput controllers[4];
 } HandmadeInput;
 
 void HandmadeUpdateAndRender(HandmadeMemory *memory, HandmadeInput *input,

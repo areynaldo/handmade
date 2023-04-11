@@ -442,8 +442,8 @@ WinMain(HINSTANCE instance,
                 // get one device context and use it forever because we
                 // are not sharing it with anyone.
                 HandmadeInput input[2] = {0};
-                HandmadeInput* oldInput = &input[0];
-                HandmadeInput* newInput = &input[1];
+                HandmadeInput *oldInput = &input[0];
+                HandmadeInput *newInput = &input[1];
                 LARGE_INTEGER lastCounter;
                 QueryPerformanceCounter(&lastCounter);
                 u64 lastCycleCount = __rdtsc();
@@ -557,7 +557,7 @@ WinMain(HINSTANCE instance,
                         }
                         else
                         {
-                            // Play cursor is in front
+                            // Play cuysor is in front
                             bytesToWrite = targetCursor - byteToLock;
                         }
                         soundIsValid = true;

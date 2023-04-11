@@ -43,7 +43,7 @@ void
 HandmadeUpdateAndRender(HandmadeMemory *memory, HandmadeInput *input,
                         HandmadeOffscreenBuffer *buffer, HandmadeSoundOutputBuffer *soundBuffer)
 {
-    Assert(sizeof(HandmadeState) <= memory->permanentStorage);
+    Assert(sizeof(HandmadeState) <= memory->permanentStorageSize);
     HandmadeState *handmadeState = (HandmadeState *)memory->permanentStorage;
 
     if (!memory->isInitialized)
@@ -51,6 +51,7 @@ HandmadeUpdateAndRender(HandmadeMemory *memory, HandmadeInput *input,
         handmadeState->xOffset = 0;
         handmadeState->yOffset = 0;
         handmadeState->toneHz = 256;
+
         memory->isInitialized = true;
     }
 
@@ -58,11 +59,7 @@ HandmadeUpdateAndRender(HandmadeMemory *memory, HandmadeInput *input,
     if (input0->isAnalog)
     {
         handmadeState->toneHz = 256 + (int)(128.0f * (input0->endY));
-        handmadeState->xOffset += (int)(4.0f * input0->endX);
-    }
-    else
-    {
-
+        handmadeState->yOffset += (int)(4.0f * input0->endY);
     }
 
     if(input0->down.endedDown)
