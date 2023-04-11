@@ -1,5 +1,15 @@
+#if HANDMADE_SLOW
+#define Assert(expression) if (!(expression)) { *(int *)0 = 0; }
+#else
+#define Assert(expression)
+#endif
+
 #ifndef HANDMADE_H
 #define HANDMADE_H
+#define Kilobytes(value) ((value)*1024LL)
+#define Megabytes(value) (Kilobytes(value)*1024LL)
+#define Gigabytes(value) (Megabytes(value)*1024LL)
+#define Terabytes(value) (Gigabytes(value)*1024LL)
 
 #define ArrayCount(array) (sizeof(array)/ sizeof((array)[0]))
 
@@ -56,11 +66,27 @@ typedef struct
 
 typedef struct
 {
+    u64 permanentStorageSize;
+    void *permanentStorage;
+    u64 transientStorageSize;
+    void *transientStorage;
+
+    b32 isInitialized;
+} HandmadeMemory;
+
+typedef struct
+{
     HandmadeControllerInput *controllers[4];
 } HandmadeInput;
 
-void HandmadeUpdateAndRender(HandmadeInput *input, HandmadeOffscreenBuffer *buffer,
-                             HandmadeSoundOutputBuffer *soundBuffer);
+void HandmadeUpdateAndRender(HandmadeMemory *memory, HandmadeInput *input,
+                             HandmadeOffscreenBuffer *buffer, HandmadeSoundOutputBuffer *soundBuffer);
 
+typedef struct
+{
+    int toneHz;
+    int xOffset;
+    int yOffset;
+} HandmadeState;
 
 #endif
