@@ -363,7 +363,7 @@ Win32MainWindowCallback(HWND window,
     {
         bool isDown = ((lParam & (1 << 31)) == 0);
         bool wasDown = ((lParam & (1 << 30)) != 0);
-        u32 vKCode = wParam;
+        u32 vKCode = (u32)wParam;
         if (isDown != wasDown)
         {
             if (vKCode == 'W')
@@ -504,10 +504,10 @@ WinMain(HINSTANCE instance,
 
             HandmadeMemory handmadeMemory = {0};
             handmadeMemory.permanentStorageSize = Megabytes(64);
-            handmadeMemory.transientStorageSize = Gigabytes(2);
+            handmadeMemory.transientStorageSize = Gigabytes(1);
 
             u64 totalStorageSize = handmadeMemory.permanentStorageSize + handmadeMemory.transientStorageSize;
-            handmadeMemory.permanentStorage = VirtualAlloc(baseAdress, totalStorageSize,
+            handmadeMemory.permanentStorage = VirtualAlloc(baseAdress, (size_t)totalStorageSize,
                                                            MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
             handmadeMemory.transientStorage = ((u8 *)handmadeMemory.permanentStorage + handmadeMemory.permanentStorageSize);
             
@@ -540,7 +540,7 @@ WinMain(HINSTANCE instance,
                         DispatchMessageA(&message);
                     }
 
-                    int maxControllerCount = XUSER_MAX_COUNT;
+                    DWORD maxControllerCount = XUSER_MAX_COUNT;
                     if(maxControllerCount < ArrayCount(newInput->controllers))
                     {
                         maxControllerCount = ArrayCount(newInput->controllers);
@@ -614,8 +614,8 @@ WinMain(HINSTANCE instance,
                         }
                     }
 
-                    DWORD byteToLock;
-                    DWORD bytesToWrite;
+                    DWORD byteToLock = 0;
+                    DWORD bytesToWrite = 0;
                     DWORD targetCursor;
                     DWORD playCursor;
                     DWORD writeCursor;
@@ -668,9 +668,9 @@ WinMain(HINSTANCE instance,
                     u64 endCycleCount = __rdtsc();
                     i64 counterElapsed = endCounter.QuadPart - lastCounter.QuadPart;
                     i64 cyclesElapsed = endCycleCount - lastCycleCount;
-                    f32 msPerFrame = 1000.0 * (f32)counterElapsed / (f32)perfCountFrequency;
+                    f32 msPerFrame = 1000.0f * (f32)counterElapsed / (f32)perfCountFrequency;
                     f32 fps = (f32)perfCountFrequency / (f32)counterElapsed;
-                    f32 megaCyclesPerFrame = (f32)cyclesElapsed / (1000.0 * 1000.0);
+                    f32 megaCyclesPerFrame = (f32)cyclesElapsed / (1000.0f * 1000.0f);
                     /*
                     char buffer[256];
                     sprintf(buffer, "%.02fms/f %.02ff/s %.02fMc/f \n", msPerFrame, fps, megaCyclesPerFrame);
