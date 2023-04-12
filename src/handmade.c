@@ -43,6 +43,14 @@ void
 HandmadeUpdateAndRender(HandmadeMemory *memory, HandmadeInput *input,
                         HandmadeOffscreenBuffer *buffer, HandmadeSoundOutputBuffer *soundBuffer)
 {
+
+    DebugReadFileResult fileData = DEBUGPlatformReadEntireFile(__FILE__);
+    if (fileData.contents)
+    {
+        DEBUGPlatformWriteEntireFile("test.out", fileData.contentsSize, fileData.contents);
+        DEBUGPlatformFreeFileMemory(fileData.contents);
+    }
+
     Assert(sizeof(HandmadeState) <= memory->permanentStorageSize);
     HandmadeState *handmadeState = (HandmadeState *)memory->permanentStorage;
 
@@ -60,6 +68,7 @@ HandmadeUpdateAndRender(HandmadeMemory *memory, HandmadeInput *input,
     {
         handmadeState->toneHz = 256 + (int)(128.0f * (input0->endY));
         handmadeState->yOffset += (int)(4.0f * input0->endY);
+        handmadeState->xOffset += (int)(4.0f * input0->endX);
     }
 
     if(input0->down.endedDown)

@@ -13,6 +13,28 @@
 
 #define ArrayCount(array) (sizeof(array)/ sizeof((array)[0]))
 
+inline u32
+SafeTruncateUInt64(u64 value)
+{
+    Assert(value <= 0xFFFFFFFF);
+    u32 result = (u32)value;
+    return result;
+}
+
+// Services the platform layer provides to the app
+
+#if HANDMADE_INTERNAL
+typedef struct
+{
+    u32 contentsSize;
+    void *contents;
+} DebugReadFileResult;
+internal DebugReadFileResult DEBUGPlatformReadEntireFile(char *fileName);
+internal void DEBUGPlatformFreeFileMemory(void *memory);
+internal b32 DEBUGPlatformWriteEntireFile(char *fileName, u32 memorySize, void *memory);
+# endif
+
+// Services the app provides to the plattform layer
 typedef struct
 {
     void *memory;

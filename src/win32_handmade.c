@@ -61,6 +61,84 @@ global XInputSetStateFunc *XInputSetState_ = XInputSetStateStub;
 #define DIRECT_SOUND_CREATE(name) HRESULT WINAPI name(LPCGUID pcGuidDevice, LPDIRECTSOUND *ppDS, LPUNKNOWN pUnkOuter)
 typedef DIRECT_SOUND_CREATE(DirectSoundCreateFunc);
 
+internal void
+DEBUGPlatformFreeFileMemory(void *memory)
+{
+    if (memory)
+    {
+        VirtualFree(memory, 0, MEM_RELEASE);
+    }
+}
+
+internal DebugReadFileResult
+DEBUGPlatformReadEntireFile(char *fileName)
+{
+    DebugReadFileResult result = {0};
+    HANDLE fileHandle = CreateFileA(fileName, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+    if(fileHandle != INVALID_HANDLE_VALUE)
+    {
+        LARGE_INTEGER fileSize;
+        if(GetFileSizeEx(fileHandle, &fileSize))
+        {
+            u32 fileSize32 = SafeTruncateUInt64(fileSize.QuadPart);
+            result.contents = VirtualAlloc(0, fileSize32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+            DWORD bytesRead;
+            if(result.contents)
+            {
+                if(ReadFile(fileHandle, result.contents, fileSize32, &bytesRead, 0) &&
+                  (fileSize.QuadPart == bytesRead))
+                {
+                    result.contentsSize = bytesRead;
+                }
+                else
+                {
+                    // Read failed
+                    DEBUGPlatformFreeFileMemory(result.contents);
+                    result.contents = 0;
+                }
+            }
+            else
+            {
+                // Memory allocation failed
+            }
+        }
+        CloseHandle(fileHandle);
+    }
+    else
+    {
+        // Handle creation failed
+    }
+
+    return result;
+}
+
+internal b32
+DEBUGPlatformWriteEntireFile(char *fileName, u32 memorySize, void *memory)
+{
+    b32 result = false;
+
+    HANDLE fileHandle = CreateFileA(fileName, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+    if(fileHandle != INVALID_HANDLE_VALUE)
+    {
+        DWORD bytesWritten;
+        if(WriteFile(fileHandle, memory, memorySize, &bytesWritten, 0))
+        {
+            result = (bytesWritten == memorySize);
+        }
+        else
+        {
+            // Write failed
+        }
+        CloseHandle(fileHandle);
+    }
+    else
+    {
+        // Handle creation failed
+    }
+            
+    return result;
+}
+
 // Change pointers if lib loaded
 internal void
 Win32LoadXInput()
