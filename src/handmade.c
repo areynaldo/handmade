@@ -12,7 +12,7 @@ RenderWeirdGradient(HandmadeOffscreenBuffer *buffer, int xOffset, int yOffset)
             // Pixel Memory BB GG RR XX
             u8 red = 0;
             u8 green = (u8)(y + yOffset);
-            u8 blue = (u8)(x + xOffset);
+            u8 blue = (u8)(x - xOffset);
 
             *pixel++ = red << 16 | green << 8 | blue;
         }
@@ -43,6 +43,8 @@ void
 HandmadeUpdateAndRender(HandmadeMemory *memory, HandmadeInput *input,
                         HandmadeOffscreenBuffer *buffer, HandmadeSoundOutputBuffer *soundBuffer)
 {
+    Assert((&input->controllers[0].terminator - &input->controllers[0].buttons[0]) ==
+            (ArrayCount(input->controllers[0].buttons)));
 
     DebugReadFileResult fileData = DEBUGPlatformReadEntireFile(__FILE__);
     if (fileData.contents)
@@ -63,17 +65,35 @@ HandmadeUpdateAndRender(HandmadeMemory *memory, HandmadeInput *input,
         memory->isInitialized = true;
     }
 
-    HandmadeControllerInput *input0 = &input->controllers[0];
-    if (input0->isAnalog)
+    for (int controllerIndex = 0;
+         controllerIndex < ArrayCount(input->controllers);
+         controllerIndex++)
     {
-        handmadeState->toneHz = 256 + (int)(128.0f * (input0->endY));
-        handmadeState->yOffset += (int)(4.0f * input0->endY);
-        handmadeState->xOffset += (int)(4.0f * input0->endX);
-    }
+        HandmadeControllerInput *controller = GetController(input, controllerIndex);
+        if (controller->isAnalog)
+        {
+            handmadeState->toneHz = 256 + (int)(128.0f * (controller->stickAverageY));
+            handmadeState->xOffset += (int)(4.0f * controller->stickAverageX);
+            handmadeState->yOffset += (int)(4.0f * controller->stickAverageY);
+        }
+        else
+        {
+            if (controller->moveLeft.endedDown)
+            {
+                handmadeState->xOffset -= 1;
 
-    if(input0->down.endedDown)
-    {
-        handmadeState->yOffset += 1;
+            }
+
+            if (controller->moveRight.endedDown)
+            {
+                handmadeState->xOffset += 1;
+            }
+        }
+
+        if(controller->actionDown.endedDown)
+        {
+            handmadeState->yOffset -= 1;
+        }
     }
 
     HandmadeOutputSound(soundBuffer, handmadeState->toneHz);

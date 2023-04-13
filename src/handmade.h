@@ -58,30 +58,33 @@ typedef struct
 
 typedef struct
 {
+    b32 isConnected;
     b32 isAnalog;
 
-    f32 startX;
-    f32 startY;
-
-    f32 minX;
-    f32 minY;
-
-    f32 maxX;
-    f32 maxY;
-
-    f32 endX;
-    f32 endY;
+    f32 stickAverageX;
+    f32 stickAverageY;
 
     union {
-        HandmadeButtonState buttons[6];
+        HandmadeButtonState buttons[12];
         struct 
         {
-            HandmadeButtonState up;
-            HandmadeButtonState down;
-            HandmadeButtonState left;
-            HandmadeButtonState right;
+            HandmadeButtonState moveUp;
+            HandmadeButtonState moveDown;
+            HandmadeButtonState moveLeft;
+            HandmadeButtonState moveRight;
+
+            HandmadeButtonState actionUp;
+            HandmadeButtonState actionDown;
+            HandmadeButtonState actionLeft;
+            HandmadeButtonState actionRight;
+
+
             HandmadeButtonState leftShoulder;
             HandmadeButtonState rightShoulder;
+            HandmadeButtonState back;
+            HandmadeButtonState start;
+
+            HandmadeButtonState terminator;
         };
     };
 } HandmadeControllerInput;
@@ -98,8 +101,15 @@ typedef struct
 
 typedef struct
 {
-    HandmadeControllerInput controllers[4];
+    HandmadeControllerInput controllers[5];
 } HandmadeInput;
+
+inline HandmadeControllerInput *GetController(HandmadeInput *input, int controllerIndex)
+{
+    Assert(controllerIndex < ArrayCount(input->controllers));
+    HandmadeControllerInput *result = &input->controllers[controllerIndex];
+    return result;
+}
 
 void HandmadeUpdateAndRender(HandmadeMemory *memory, HandmadeInput *input,
                              HandmadeOffscreenBuffer *buffer, HandmadeSoundOutputBuffer *soundBuffer);
