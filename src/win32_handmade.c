@@ -23,7 +23,6 @@ typedef i32 b32;
 
 #define Pi32 3.14159265359f
 
-
 #include <dsound.h>
 #include <stdio.h>
 #include <windows.h>
@@ -35,6 +34,7 @@ typedef i32 b32;
 global bool running;
 global Win32OffscreenBuffer globalBackBuffer;
 global IDirectSoundBuffer *globalSecondaryBuffer;
+global i64 globalPerfCountFrequency;
 
 // TODO: review conventions
 // XInputGetState
@@ -522,6 +522,23 @@ Win32ProcessXInputStickValue(SHORT value, SHORT deadZoneThreshold)
     return result;
 }
 
+inline LARGE_INTEGER
+Win32GetWallClock()
+{
+    LARGE_INTEGER result;
+    QueryPerformanceCounter(&result);
+    return result;
+}
+
+inline f32
+Win32GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end)
+{
+    f32 result = (f32)(end.QuadPart - start.QuadPart) /
+                 (f32)globalPerfCountFrequency;
+
+    return result;
+}
+
 int CALLBACK
 WinMain(HINSTANCE instance,
         HINSTANCE previousInstance,
@@ -530,7 +547,10 @@ WinMain(HINSTANCE instance,
 {
     LARGE_INTEGER perfCountFrequencyResult;
     QueryPerformanceFrequency(&perfCountFrequencyResult);
-    i64 perfCountFrequency = perfCountFrequencyResult.QuadPart;
+    globalPerfCountFrequency = perfCountFrequencyResult.QuadPart;
+
+    UINT desiredSchedulerMs = 1;
+    b32 sleepIsGranular = (timeBeginPeriod(desiredSchedulerMs) == TIMERR_NOERROR);
 
     Win32LoadXInput();
 
@@ -539,6 +559,10 @@ WinMain(HINSTANCE instance,
     windowClass.lpfnWndProc = Win32MainWindowCallback;
     windowClass.hInstance = instance;
     windowClass.lpszClassName = "HandmadeWindowClass";
+
+    int monitorRefreshHz = 60;
+    int gameUpdateHz = monitorRefreshHz / 2;
+    f32 targetSecondsPerFrame = 1.0f / (f32)gameUpdateHz;
 
     if (RegisterClassA(&windowClass))
     {
@@ -590,8 +614,8 @@ WinMain(HINSTANCE instance,
                 HandmadeInput input[2] = {0};
                 HandmadeInput *oldInput = &input[0];
                 HandmadeInput *newInput = &input[1];
-                LARGE_INTEGER lastCounter;
-                QueryPerformanceCounter(&lastCounter);
+
+                LARGE_INTEGER lastCounter = Win32GetWallClock();
                 u64 lastCycleCount = __rdtsc();
                 running = true;
                 while (running)
@@ -767,29 +791,57 @@ WinMain(HINSTANCE instance,
                         Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuffer);
                     }
 
+
+                    LARGE_INTEGER workCounter = Win32GetWallClock();
+                    f32 workSecondsElapsed = Win32GetSecondsElapsed(lastCounter, workCounter);
+                    f32 secondsElapsedForFrame = workSecondsElapsed;
+
+                    if(secondsElapsedForFrame < targetSecondsPerFrame)
+                    {
+                        
+                        while (secondsElapsedForFrame < targetSecondsPerFrame)
+                        {
+                            if(sleepIsGranular)
+                            {
+                                DWORD sleepMs = (DWORD)(1000.0f * (targetSecondsPerFrame - secondsElapsedForFrame));
+                                if (sleepMs > 0)
+                                {
+                                    Sleep(sleepMs);
+                                }
+                            }
+                            secondsElapsedForFrame = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
+                        }
+                    }
+                    else
+                    {
+                        // Missed frame rate
+                    }
+
                     Win32WindowDimension dimension = Win32GetWindowDimension(window);
                     Win32DisplayBufferInWindow(&globalBackBuffer, deviceContext, dimension.width, dimension.height);
-
-                    LARGE_INTEGER endCounter;
-                    QueryPerformanceCounter(&endCounter);
-
-                    u64 endCycleCount = __rdtsc();
-                    i64 counterElapsed = endCounter.QuadPart - lastCounter.QuadPart;
-                    i64 cyclesElapsed = endCycleCount - lastCycleCount;
-                    f32 msPerFrame = 1000.0f * (f32)counterElapsed / (f32)perfCountFrequency;
-                    f32 fps = (f32)perfCountFrequency / (f32)counterElapsed;
-                    f32 megaCyclesPerFrame = (f32)cyclesElapsed / (1000.0f * 1000.0f);
-                    /*
-                    char buffer[256];
-                    sprintf(buffer, "%.02fms/f %.02ff/s %.02fMc/f \n", msPerFrame, fps, megaCyclesPerFrame);
-                    OutputDebugStringA(buffer);
-                    */
-                    lastCounter = endCounter;
-                    lastCycleCount = __rdtsc();
 
                     HandmadeInput *temp = newInput;
                     newInput = oldInput;
                     oldInput = temp;
+
+                    LARGE_INTEGER endCounter = Win32GetWallClock();
+                    f32 msPerFrame = 1000.0f * Win32GetSecondsElapsed(lastCounter, endCounter);
+                    lastCounter = endCounter;
+
+                    u64 endCycleCount = __rdtsc();
+                    i64 cyclesElapsed = endCycleCount - lastCycleCount;
+                    lastCycleCount = endCycleCount;
+
+                    #if 1
+                        f32 fps = 0.0f;
+                        f32 megaCyclesPerFrame = (f32)cyclesElapsed / (1000.0f * 1000.0f);
+
+                        char fpsBuffer[256];
+                        sprintf_s(fpsBuffer, sizeof(fpsBuffer), "%.02fms/f, %.02ff/s, %.02fMc/f\n",
+                                  msPerFrame, fps, megaCyclesPerFrame);
+                        OutputDebugStringA(fpsBuffer);
+                    #endif
+
                 }
             }
             else
